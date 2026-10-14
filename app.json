@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Calm Alarm",
+    "slug": "calm-alarm",
+    "scheme": "calmalarm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_FULL_SCREEN_INTENT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "package": "com.example.calmalarm"
+    },
+    "plugins": [
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-audio",
+      "expo-status-bar",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "abd6e15a-2bc2-43ad-a288-c61a60b7b8d8"
+      }
+    }
+  }
+}
