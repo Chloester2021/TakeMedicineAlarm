@@ -1,0 +1,15 @@
+# Dependencies and temporary caches
+node_modules/
+.expo/
+.gradle/
+**/.gradle/
+
+# Generated native projects. EAS prebuild recreates these from app.json/plugins.
+# Keep modules/ and plugins/ in the upload: they contain the native alarm source.
+/android/
+/ios/
+
+# Editor files
+.vscode/
+.idea/
+*.log

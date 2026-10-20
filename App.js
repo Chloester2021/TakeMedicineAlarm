@@ -1,82 +1,195 @@
-import React, {useState,useEffect,useRef} from 'react';
-import {View,Text,TextInput,TouchableOpacity,ScrollView,Switch,StyleSheet,StatusBar,Alert,Keyboard,AppState} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import * as Notifications from 'expo-notifications';
-import * as Speech from 'expo-speech';
-import {createAudioPlayer, setAudioModeAsync} from 'expo-audio';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { View, Text, StatusBar, Alert, Keyboard } from 'react-native'
+import * as SecureStore from 'expo-secure-store'
+import * as Notifications from 'expo-notifications'
+import HomeScreen from './src/screens/HomeScreen'
+import AlarmEditor from './src/screens/AlarmEditor'
+import RingingScreen from './src/screens/RingingScreen'
+import PasswordScreen from './src/screens/PasswordScreen'
+import { defaultDraft } from './src/utils/alarm'
+import {
+  loadAlarms,
+  storeAlarms,
+  scheduleAlarm,
+  cancelIds,
+} from './src/services/alarms'
+import { useRinging } from './src/hooks/useRinging'
+import styles from './src/styles/styles'
 
-Notifications.setNotificationHandler({handleNotification: async()=>({shouldShowBanner:true,shouldShowList:true,shouldPlaySound:true,shouldSetBadge:false})});
-const BG='#eff7f4', DARK='#173346', TEAL='#0d7b72', MINT='#9cf6e3', CORAL='#ef5b4b';
-const WEEK=['M','T','W','T','F','S','S'];
-const defaultDraft=()=>({id:null,hour:7,minute:0,message:'',days:[],sound:'Gentle chime',enabled:true});
-const two=n=>String(n).padStart(2,'0');
-const timeLabel=(h,m)=>`${two((h%12)||12)}:${two(m)} ${h>=12?'PM':'AM'}`;
-const tokenText=(message,date)=>message.replace(/\{day\}/g,date.toLocaleDateString('en-US',{weekday:'long'})).replace(/\{date\}/g,date.toLocaleDateString('en-US',{month:'long',day:'numeric'})).replace(/\{time\}/g,date.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));
-const Button=({children,onPress,secondary=false,style})=><TouchableOpacity onPress={onPress} style={[styles.button,secondary&&styles.secondary,style]}><Text style={[styles.buttonText,secondary&&{color:DARK}]}>{children}</Text></TouchableOpacity>;
-const Label=({children})=><Text style={styles.label}>{children}</Text>;
-function nextOccurrence(alarm,from=new Date()){
- for(let d=0;d<8;d++){const date=new Date(from);date.setDate(from.getDate()+d);date.setHours(alarm.hour,alarm.minute,0,0);const weekday=(date.getDay()+6)%7;if(date>from&&(!alarm.days.length||alarm.days.includes(weekday)))return date;}
- return null;
+export default function App() {
+  const [screen, setScreen] = useState('loading')
+  const [alarms, setAlarms] = useState([])
+  const [draft, setDraft] = useState(defaultDraft)
+  const [now, setNow] = useState(new Date())
+  const [passwordEnabled, setPasswordEnabled] = useState(false)
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const alarmsRef = useRef([])
+  useEffect(() => {
+    alarmsRef.current = alarms
+  }, [alarms])
+  const onRingFinished = useCallback(
+    (isPreview) => setScreen(isPreview ? 'edit' : 'home'),
+    [],
+  )
+  const { ring, start: openRing, stop: stopRing } = useRinging(onRingFinished)
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      try {
+        await Notifications.requestPermissionsAsync()
+        const saved = await loadAlarms()
+        const protectedMode =
+          (await SecureStore.getItemAsync('passwordEnabled')) === 'true'
+        const scheduled = await Promise.all(saved.map(scheduleAlarm))
+        if (!mounted) return
+        setPasswordEnabled(protectedMode)
+        setAlarms(scheduled)
+        await storeAlarms(scheduled)
+        setScreen(protectedMode ? 'unlock' : 'home')
+      } catch (e) {
+        console.warn('Alarm initialization', e)
+        if (mounted) {
+          Alert.alert('Setup warning', String(e))
+          setScreen('home')
+        }
+      }
+    }
+    load()
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const id = response.notification.request.content.data?.alarmId
+        const found = alarmsRef.current.find((a) => a.id === id)
+        if (found) {
+          setScreen('ring')
+          openRing(found, false)
+        }
+      },
+    )
+    return () => {
+      mounted = false
+      subscription.remove()
+    }
+  }, [openRing])
+  const persist = async (next) => {
+    setAlarms(next)
+    await storeAlarms(next)
+  }
+  const save = async () => {
+    Keyboard.dismiss()
+    try {
+      const alarm = { ...draft, id: draft.id || String(Date.now()) }
+      const scheduled = await scheduleAlarm(alarm)
+      await persist([...alarms.filter((a) => a.id !== alarm.id), scheduled])
+      setScreen('home')
+    } catch (e) {
+      Alert.alert('Could not schedule alarm', String(e))
+    }
+  }
+  const remove = async (alarm) => {
+    try {
+      await cancelIds(alarm)
+      await persist(alarms.filter((a) => a.id !== alarm.id))
+    } catch (e) {
+      Alert.alert('Delete failed', String(e))
+    }
+  }
+  const toggle = async (alarm) => {
+    try {
+      const updated = await scheduleAlarm({ ...alarm, enabled: !alarm.enabled })
+      await persist(alarms.map((a) => (a.id === alarm.id ? updated : a)))
+    } catch (e) {
+      Alert.alert('Alarm error', String(e))
+    }
+  }
+  const edit = (alarm) => {
+    setDraft(alarm ? { ...alarm, days: [...alarm.days] } : defaultDraft())
+    setScreen('edit')
+  }
+  const setupPassword = async () => {
+    if (password.length < 4)
+      return Alert.alert('Password too short', 'Use at least four characters.')
+    if (password !== confirm) return Alert.alert('Passwords do not match')
+    await SecureStore.setItemAsync('alarmPassword', password)
+    await SecureStore.setItemAsync('passwordEnabled', 'true')
+    setPasswordEnabled(true)
+    setPassword('')
+    setConfirm('')
+    setScreen('home')
+  }
+  const unlock = async () => {
+    if (password !== (await SecureStore.getItemAsync('alarmPassword')))
+      return Alert.alert('Incorrect password')
+    setPassword('')
+    setScreen('home')
+  }
+  const disablePassword = async () => {
+    await SecureStore.deleteItemAsync('alarmPassword')
+    await SecureStore.setItemAsync('passwordEnabled', 'false')
+    setPasswordEnabled(false)
+    setScreen('home')
+  }
+  const passwordAction = () =>
+    passwordEnabled
+      ? Alert.alert(
+          'Password protection',
+          'Turn off password protection for this device?',
+          [{ text: 'Cancel' }, { text: 'Disable', onPress: disablePassword }],
+        )
+      : (setPassword(''), setConfirm(''), setScreen('password'))
+  if (screen === 'loading')
+    return (
+      <View style={styles.center}>
+        <Text>Loading alarms…</Text>
+      </View>
+    )
+  if (screen === 'ring' && ring)
+    return <RingingScreen alarm={ring} onStop={stopRing} />
+  if (screen === 'unlock' || screen === 'password')
+    return (
+      <PasswordScreen
+        unlockMode={screen === 'unlock'}
+        password={password}
+        setPassword={setPassword}
+        confirm={confirm}
+        setConfirm={setConfirm}
+        onSubmit={screen === 'unlock' ? unlock : setupPassword}
+        onCancel={() => setScreen('home')}
+      />
+    )
+  if (screen === 'edit')
+    return (
+      <>
+        <StatusBar barStyle="dark-content" />
+        <AlarmEditor
+          draft={draft}
+          setDraft={setDraft}
+          onCancel={() => setScreen('home')}
+          onSave={save}
+          onPreview={() => {
+            setScreen('ring')
+            openRing(draft, true)
+          }}
+        />
+      </>
+    )
+  return (
+    <>
+      <StatusBar barStyle="dark-content" />
+      <HomeScreen
+        now={now}
+        alarms={alarms}
+        onAdd={() => edit(null)}
+        onEdit={edit}
+        onDelete={remove}
+        onToggle={toggle}
+        passwordEnabled={passwordEnabled}
+        onPassword={passwordAction}
+      />
+    </>
+  )
 }
-async function cancelIds(alarm){for(const id of alarm.notificationIds||[]){try{await Notifications.cancelScheduledNotificationAsync(id)}catch(e){}}}
-async function scheduleAlarm(alarm){
- await cancelIds(alarm);
- if(!alarm.enabled)return {...alarm,notificationIds:[]};
- const ids=[];const now=new Date();
- // Rolling 7-day schedule. Repeat alarms are refreshed when the app opens.
- for(let d=0;d<7;d++){
-  const at=new Date(now);at.setDate(now.getDate()+d);at.setHours(alarm.hour,alarm.minute,0,0);
-  if(at<=now)continue;
-  if(alarm.days.length&&!alarm.days.includes((at.getDay()+6)%7))continue;
-  const id=await Notifications.scheduleNotificationAsync({content:{title:'Alarm ringing',body:tokenText(alarm.message||'Time to wake up',at),sound:'default',data:{alarmId:alarm.id}},trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:at}});
-  ids.push(id);if(!alarm.days.length)break;
- }
- return {...alarm,notificationIds:ids};
-}
-export default function App(){
- const [screen,setScreen]=useState('loading'),[alarms,setAlarms]=useState([]),[draft,setDraft]=useState(defaultDraft()),[now,setNow]=useState(new Date()),[picker,setPicker]=useState(false),[ring,setRing]=useState(null),[preview,setPreview]=useState(false),[passwordEnabled,setPasswordEnabled]=useState(false),[passwordText,setPasswordText]=useState(''),[passwordConfirm,setPasswordConfirm]=useState(''),[passwordMode,setPasswordMode]=useState('setup'),[authenticated,setAuthenticated]=useState(false);
- const messageRef=useRef(null),selection=useRef({start:0,end:0}),ringTimer=useRef(null),ringStopAt=useRef(null),ringAudioTimer=useRef(null),ringPlayer=useRef(null),ringSession=useRef(0),previewRef=useRef(false),alarmsRef=useRef([]);
- useEffect(()=>{alarmsRef.current=alarms},[alarms]);
- useEffect(()=>{const t=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(t)},[]);
- useEffect(()=>{(async()=>{try{await Notifications.requestPermissionsAsync();const saved=JSON.parse(await AsyncStorage.getItem('alarms')||'[]');const protectedMode=await SecureStore.getItemAsync('passwordEnabled')==='true';setPasswordEnabled(protectedMode);const scheduled=await Promise.all(saved.map(scheduleAlarm));setAlarms(scheduled);await AsyncStorage.setItem('alarms',JSON.stringify(scheduled));setScreen(protectedMode?'unlock':'home')}catch(e){Alert.alert('Setup warning',String(e));setScreen('home')}})();const sub=Notifications.addNotificationResponseReceivedListener(response=>{const id=response.notification.request.content.data?.alarmId;const found=alarmsRef.current.find(a=>a.id===id);if(found)openRing(found,false)});return()=>sub.remove()},[]);
- useEffect(()=>{const sub=AppState.addEventListener('change',state=>{if(state==='active'&&ringStopAt.current&&Date.now()>=ringStopAt.current)stopRing()});return()=>sub.remove()},[]);
- const persist=async next=>{setAlarms(next);await AsyncStorage.setItem('alarms',JSON.stringify(next))};
- const stopRing=()=>{ringSession.current++;clearTimeout(ringTimer.current);clearTimeout(ringAudioTimer.current);ringStopAt.current=null;Speech.stop();try{ringPlayer.current?.pause();ringPlayer.current?.remove()}catch(e){}ringPlayer.current=null;setRing(null);setScreen(previewRef.current?'edit':'home')};
- const openRing=async(alarm,isPreview)=>{
-  const session=++ringSession.current;
-  clearTimeout(ringTimer.current);clearTimeout(ringAudioTimer.current);Speech.stop();
-  try{ringPlayer.current?.pause();ringPlayer.current?.remove()}catch(e){}ringPlayer.current=null;
-  previewRef.current=isPreview;setPreview(isPreview);setRing(alarm);setScreen('ring');
-  ringStopAt.current=Date.now()+60000;
-  ringTimer.current=setTimeout(()=>{if(session===ringSession.current)stopRing()},60000);
-  const msg=tokenText(alarm.message||'Time to wake up',new Date());
-  try{
-   await setAudioModeAsync({playsInSilentMode:true});
-   if(session!==ringSession.current)return;
-   const player=createAudioPlayer(require('./assets/chime.wav'));
-   ringPlayer.current=player;player.play();
-   // First play the chime, then read the message aloud. Never speak after Stop.
-   ringAudioTimer.current=setTimeout(()=>{
-    if(session!==ringSession.current)return;
-    try{player.pause()}catch(e){}
-    Speech.speak(msg,{language:'en-US',rate:0.9});
-   },2200);
-  }catch(e){if(session===ringSession.current)Speech.speak(msg,{language:'en-US',rate:0.9})}
- };
- const save=async()=>{Keyboard.dismiss();try{const a={...draft,id:draft.id||String(Date.now())};const scheduled=await scheduleAlarm(a);const next=[...alarms.filter(x=>x.id!==a.id),scheduled];await persist(next);setScreen('home')}catch(e){Alert.alert('Could not schedule alarm',String(e))}};
- const remove=async a=>{await cancelIds(a);await persist(alarms.filter(x=>x.id!==a.id))};
- const toggle=async a=>{try{const updated=await scheduleAlarm({...a,enabled:!a.enabled});await persist(alarms.map(x=>x.id===a.id?updated:x))}catch(e){Alert.alert('Alarm error',String(e))}};
- const insertToken=t=>{const v=draft.message;const {start,end}=selection.current;const result=v.slice(0,start)+t+v.slice(end);setDraft({...draft,message:result});selection.current={start:start+t.length,end:start+t.length};messageRef.current?.focus()};
- const beginEdit=a=>{setDraft(a||defaultDraft());setScreen('edit')};
- const savePassword=async()=>{if(passwordText.length<4)return Alert.alert('Password too short','Use at least four characters.');if(passwordText!==passwordConfirm)return Alert.alert('Passwords do not match');await SecureStore.setItemAsync('alarmPassword',passwordText);await SecureStore.setItemAsync('passwordEnabled','true');setPasswordEnabled(true);setAuthenticated(true);setPasswordText('');setPasswordConfirm('');setScreen('home')};
- const unlock=async()=>{const stored=await SecureStore.getItemAsync('alarmPassword');if(passwordText!==stored)return Alert.alert('Incorrect password');setAuthenticated(true);setPasswordText('');setScreen('home')};
- const disablePassword=async()=>{await SecureStore.deleteItemAsync('alarmPassword');await SecureStore.setItemAsync('passwordEnabled','false');setPasswordEnabled(false);setAuthenticated(false);setScreen('home')};
- if(screen==='loading')return <View style={styles.center}><Text>Loading alarms…</Text></View>;
- if(screen==='ring')return <View style={styles.ringing}><StatusBar barStyle="light-content"/><Text style={styles.ringEyebrow}>{preview?'ALARM PREVIEW':'ALARM RINGING'}</Text><Text style={styles.ringTitle}>Time to wake up</Text><Text style={styles.ringName}>Alarm</Text><Text style={styles.ringTime}>{timeLabel(ring.hour,ring.minute)}</Text><Text style={styles.ringMessage}>{tokenText(ring.message||'Time to wake up',new Date())}</Text><Button onPress={stopRing} style={styles.stopButton}>Stop</Button><Text style={styles.ringFooter}>{preview?'Preview mode':'Automatically stops after one minute'}</Text></View>;
- if(screen==='unlock'||screen==='password')return <View style={styles.center}><View style={styles.modal}><Text style={styles.eyebrow}>PRIVACY</Text><Text style={styles.heading}>{screen==='unlock'?'Password required':'Set up your password'}</Text><Text style={styles.muted}>{screen==='unlock'?'Enter your password once to open the app.':'Optional protection, requested once per app launch.'}</Text><Label>Password</Label><TextInput secureTextEntry value={passwordText} onChangeText={setPasswordText} placeholder="Password" style={styles.input}/>{screen==='password'&&<><Label>Confirm password</Label><TextInput secureTextEntry value={passwordConfirm} onChangeText={setPasswordConfirm} placeholder="Confirm password" style={styles.input}/></>}<Button onPress={screen==='unlock'?unlock:savePassword}>{screen==='unlock'?'Continue':'Save password'}</Button>{screen==='password'&&<Button secondary onPress={()=>setScreen('home')}>Cancel</Button>}</View></View>;
- if(screen==='edit')return <View style={styles.page}><StatusBar barStyle="dark-content"/><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}><View style={styles.headerRow}><View><Text style={styles.eyebrow}>SCHEDULE</Text><Text style={styles.heading}>{draft.id?'Edit alarm':'New alarm'}</Text></View><TouchableOpacity onPress={()=>setScreen('home')}><Text style={styles.close}>×</Text></TouchableOpacity></View><Label>Time</Label><TouchableOpacity onPress={()=>setPicker(true)} style={styles.timeInput}><Text style={styles.bigTime}>{timeLabel(draft.hour,draft.minute)}</Text><Text style={styles.clock}>◷</Text></TouchableOpacity>{picker&&<DateTimePicker value={new Date(2026,0,1,draft.hour,draft.minute)} mode="time" display="spinner" onChange={(event,date)=>{if(date)setDraft(x=>({...x,hour:date.getHours(),minute:date.getMinutes()}));if(event.type==='dismissed'||event.type==='set')setPicker(false)}}/>}<Label>Message</Label><TextInput ref={messageRef} style={[styles.input,{minHeight:48}]} placeholder="e.g. Good morning, today is {day}" value={draft.message} onChangeText={message=>setDraft(x=>({...x,message}))} onSelectionChange={e=>selection.current=e.nativeEvent.selection} multiline/><View style={styles.tokenRow}>{[['▦','day','{day}'],['▤','date','{date}'],['◷','time','{time}']].map(([ico,name,token])=><TouchableOpacity key={name} onPress={()=>insertToken(token)} style={styles.token}><Text style={styles.tokenIcon}>{ico}</Text><Text style={styles.tokenLabel}>{name}</Text></TouchableOpacity>)}</View><TouchableOpacity onPress={()=>openRing(draft,true)} style={styles.preview}><Text style={styles.previewText}>◎  Preview alarm card</Text></TouchableOpacity><Label>Repeat</Label><View style={styles.weekRow}>{WEEK.map((day,i)=><TouchableOpacity key={i} onPress={()=>setDraft(x=>({...x,days:x.days.includes(i)?x.days.filter(d=>d!==i):[...x.days,i].sort()}))} style={[styles.day,draft.days.includes(i)&&styles.dayActive]}><Text style={[styles.dayText,draft.days.includes(i)&&{color:'white'}]}>{day}</Text></TouchableOpacity>)}</View><Text style={styles.hint}>{draft.days.length?'Repeats on selected days.':'Leave all days clear for a one-time alarm.'}</Text><Label>Sound</Label><View style={styles.input}><Text style={{color:DARK}}>Gentle chime (system notification sound)</Text></View><View style={styles.actions}><Button secondary style={{flex:1}} onPress={()=>setScreen('home')}>Cancel</Button><Button style={{flex:1}} onPress={save}>Save alarm</Button></View></ScrollView></View>;
- return <View style={styles.home}><StatusBar barStyle="dark-content"/><ScrollView contentContainerStyle={styles.homeScroll}><View style={styles.headerRow}><View><Text style={styles.eyebrow}>DAILY RHYTHM</Text><Text style={styles.appTitle}>Alarm Clock</Text></View><View style={styles.localTime}><Text style={styles.small}>LOCAL TIME</Text><Text style={styles.localTimeValue}>{timeLabel(now.getHours(),now.getMinutes())}</Text></View></View><View style={styles.hero}><Text style={styles.small}>{now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</Text><Text style={styles.heroTime}>{timeLabel(now.getHours(),now.getMinutes())}</Text><Text style={styles.muted}>Your next calm start begins here.</Text></View><View style={styles.headerRow}><View><Text style={styles.sectionTitle}>Your alarms</Text><Text style={styles.muted}>Ready when you are.</Text></View><Button onPress={()=>beginEdit(null)}>＋ Add</Button></View>{alarms.length===0&&<View style={styles.alarmCard}><Text style={styles.muted}>No alarms yet. Add your first alarm.</Text></View>}{alarms.sort((a,b)=>a.hour*60+a.minute-b.hour*60).map(a=><View key={a.id} style={styles.alarmCard}><View style={styles.headerRow}><View style={{flex:1}}><Text style={styles.cardTime}>{timeLabel(a.hour,a.minute)}</Text><Text style={styles.cardMessage} numberOfLines={2}>{a.message||'Alarm'}</Text><Text style={styles.small}>{a.days.length?a.days.map(i=>WEEK[i]).join(' · '):'Once'}</Text></View><Switch value={a.enabled} onValueChange={()=>toggle(a)} trackColor={{true:TEAL}}/></View><View style={styles.cardBottom}><Text style={styles.soundText}>♫  GENTLE</Text><View style={{flexDirection:'row',gap:22}}><TouchableOpacity onPress={()=>beginEdit(a)}><Text style={styles.actionIcon}>✎</Text></TouchableOpacity><TouchableOpacity onPress={()=>Alert.alert('Delete alarm?','This cannot be undone.',[{text:'Cancel'},{text:'Delete',style:'destructive',onPress:()=>remove(a)}])}><Text style={[styles.actionIcon,{color:'#e84a5a'}]}>♜</Text></TouchableOpacity></View></View></View>)}</ScrollView><View style={styles.footer}><Text style={styles.footerPill}>◉  Alarms</Text><TouchableOpacity style={styles.passwordButton} onPress={()=>passwordEnabled?Alert.alert('Password protection','Turn off password protection for this device?',[{text:'Cancel'},{text:'Disable',onPress:disablePassword}]): (setPasswordText(''),setPasswordConfirm(''),setScreen('password'))}><Text style={styles.buttonText}>{passwordEnabled?'✓ Password on':'♧ Set up password'}</Text></TouchableOpacity></View></View>;
-}
-const styles=StyleSheet.create({page:{flex:1,backgroundColor:'#fffaf5'},home:{flex:1,backgroundColor:BG},scroll:{padding:28,paddingTop:42,paddingBottom:45},homeScroll:{padding:16,paddingTop:38,paddingBottom:100},headerRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:12},eyebrow:{fontSize:10,color:TEAL,fontWeight:'800',letterSpacing:1.4},heading:{fontSize:22,color:DARK,fontWeight:'800',marginTop:5,marginBottom:18},appTitle:{fontSize:24,fontWeight:'800',color:DARK,marginTop:6},close:{fontSize:30,color:'#64748b'},label:{fontSize:12,fontWeight:'800',color:DARK,marginTop:19,marginBottom:8},input:{backgroundColor:'#fff',borderColor:'#dbe4ec',borderWidth:1,borderRadius:12,paddingHorizontal:14,paddingVertical:12,fontSize:14,color:DARK,justifyContent:'center'},timeInput:{borderColor:'#dbe4ec',borderWidth:1,borderRadius:12,padding:14,backgroundColor:'white',flexDirection:'row',alignItems:'center',justifyContent:'space-between'},bigTime:{fontSize:25,fontWeight:'900',color:'#273244',fontVariant:['tabular-nums']},clock:{fontSize:28,color:'#111'},tokenRow:{flexDirection:'row',gap:6,marginTop:10},token:{flex:1,backgroundColor:'#eefcf9',borderColor:'#a6f4e7',borderWidth:1,borderRadius:30,alignItems:'center',justifyContent:'center',height:34},tokenIcon:{fontSize:15,color:TEAL},tokenLabel:{fontSize:10,fontWeight:'700',color:TEAL},preview:{alignSelf:'flex-start',backgroundColor:'#eef3f8',borderRadius:25,paddingVertical:10,paddingHorizontal:14,marginTop:10},previewText:{fontSize:12,fontWeight:'700',color:'#45556a'},weekRow:{flexDirection:'row',gap:4},day:{flex:1,borderRadius:10,backgroundColor:'#fff',borderWidth:1,borderColor:'#e7eaf0',height:34,alignItems:'center',justifyContent:'center'},dayActive:{backgroundColor:TEAL},dayText:{fontSize:11,fontWeight:'800',color:DARK},hint:{fontSize:12,color:'#778391',marginTop:9},actions:{flexDirection:'row',gap:10,marginTop:20},button:{backgroundColor:TEAL,paddingVertical:12,paddingHorizontal:20,borderRadius:30,alignItems:'center',justifyContent:'center'},secondary:{backgroundColor:'#e7eef0'},buttonText:{color:'white',fontSize:13,fontWeight:'800'},small:{fontSize:12,color:'#587087'},localTime:{backgroundColor:'white',padding:10,borderRadius:14,alignItems:'center'},localTimeValue:{fontSize:15,fontWeight:'900',color:DARK},hero:{backgroundColor:'white',borderRadius:22,padding:18,marginTop:16,marginBottom:24},heroTime:{fontSize:37,fontWeight:'900',color:DARK,marginVertical:8},muted:{color:'#667f93',fontSize:13,lineHeight:19},sectionTitle:{fontSize:17,fontWeight:'800',color:DARK,marginBottom:4},alarmCard:{backgroundColor:'white',padding:16,borderRadius:18,marginTop:16},cardTime:{fontSize:25,fontWeight:'900',color:DARK},cardMessage:{fontSize:13,fontWeight:'700',color:DARK,marginTop:4,marginBottom:5},cardBottom:{borderTopWidth:1,borderTopColor:'#f1f4f5',marginTop:18,paddingTop:16,flexDirection:'row',justifyContent:'space-between'},soundText:{fontSize:10,color:TEAL,fontWeight:'800'},actionIcon:{fontSize:21,color:DARK},footer:{position:'absolute',bottom:0,left:0,right:0,backgroundColor:'white',padding:12,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},footerPill:{backgroundColor:'#e8faf6',color:TEAL,padding:12,borderRadius:22,fontWeight:'800',fontSize:12},passwordButton:{backgroundColor:CORAL,borderRadius:24,padding:13},ringing:{flex:1,backgroundColor:DARK,alignItems:'center',justifyContent:'center',padding:30},ringEyebrow:{color:'#ffa79c',fontSize:11,fontWeight:'800',letterSpacing:1.5},ringTitle:{fontSize:19,fontWeight:'800',color:'white',marginTop:12},ringName:{fontSize:26,fontWeight:'800',color:'white',marginTop:26},ringTime:{fontSize:52,color:MINT,fontWeight:'900',marginTop:8},ringMessage:{fontSize:19,color:'white',textAlign:'center',marginTop:28,marginBottom:28,lineHeight:27},stopButton:{backgroundColor:CORAL,width:'100%',borderRadius:24,paddingVertical:26},ringFooter:{color:'#a6c5d2',marginTop:20,fontSize:12},center:{flex:1,justifyContent:'center',padding:16,backgroundColor:'#899da4'},modal:{backgroundColor:'#fffaf5',borderRadius:24,padding:24},ringingButton:{backgroundColor:CORAL}});

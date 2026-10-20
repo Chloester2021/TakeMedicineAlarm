@@ -31,7 +31,8 @@
       "expo-secure-store",
       "expo-audio",
       "expo-status-bar",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withCalmAlarm"
     ],
     "extra": {
       "eas": {

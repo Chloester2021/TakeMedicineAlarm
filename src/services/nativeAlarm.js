@@ -1,0 +1,11 @@
+import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+const native = Platform.OS === 'android' ? requireOptionalNativeModule('CalmAlarmNative') : null;
+export const hasNativeAlarm = () => !!native;
+export const canScheduleExact = () => native?.canScheduleExact() ?? false;
+export const canUseFullScreen = () => native?.canUseFullScreen() ?? false;
+export const openExactSettings = () => native?.openExactSettings();
+export const openFullScreenSettings = () => native?.openFullScreenSettings();
+export const systemAlarmSound = () => native?.systemAlarmSound();
+export const scheduleNativeAlarm = (id, date, message, sound) => native.schedule(id, date.getTime(), message, sound || null);
+export const cancelNativeAlarm = (id) => native.cancel(id);
