@@ -8,10 +8,24 @@ import android.os.Build
 import android.provider.Settings
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.functions.Queues
 
 class CalmAlarmModule:Module(){
  override fun definition()=ModuleDefinition{
   Name("CalmAlarmNative")
+  Function("capabilitiesVersion") { 4 }
+  OnCreate { appContext.reactContext?.let { AlarmVolumeManager.recover(it) } }
+  AsyncFunction("startRingingPreview") { session: String, message: String, durationMinutes: Int, volumePercent: Int? ->
+    AlarmPreview.start(requireNotNull(appContext.reactContext), session, message, durationMinutes, volumePercent)
+  }.runOnQueue(Queues.MAIN)
+  AsyncFunction("stopRingingPreview") { session: String -> AlarmPreview.stop(session) }.runOnQueue(Queues.MAIN)
+  AsyncFunction("scheduleManagedAlarm") { payload: String -> AlarmStore.schedule(requireNotNull(appContext.reactContext), payload) }
+  AsyncFunction("cancelManagedAlarm") { id: String -> AlarmStore.cancel(requireNotNull(appContext.reactContext), id) }
+  AsyncFunction("getAlarmStates") { AlarmStore.states(requireNotNull(appContext.reactContext)) }
+  AsyncFunction("restoreManagedAlarms") { AlarmStore.restore(requireNotNull(appContext.reactContext)) }
+  AsyncFunction("startDefaultTone") { DefaultAlarmTone.startPreview(requireNotNull(appContext.reactContext)) }.runOnQueue(Queues.MAIN)
+  AsyncFunction("stopDefaultTone") { DefaultAlarmTone.stopPreview() }.runOnQueue(Queues.MAIN)
+  OnDestroy { android.os.Handler(android.os.Looper.getMainLooper()).post { AlarmPreview.stopAll(); DefaultAlarmTone.stopPreview() } }
   AsyncFunction("schedule"){id:String,time:Double,message:String,sound:String?->
    AlarmCore.channel(requireNotNull(appContext.reactContext));AlarmCore.schedule(requireNotNull(appContext.reactContext),id,time.toLong(),message,sound)
   }
@@ -19,7 +33,7 @@ class CalmAlarmModule:Module(){
   Function("canScheduleExact"){val c=requireNotNull(appContext.reactContext);Build.VERSION.SDK_INT<31||c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()}
   Function("canUseFullScreen"){val c=requireNotNull(appContext.reactContext);Build.VERSION.SDK_INT<34||c.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()}
   Function("openExactSettings"){
-   val c=requireNotNull(appContext.reactContext);if(Build.VERSION.SDK_INT>=31)c.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+   val c=requireNotNull(appContext.reactContext);if(Build.VERSION.SDK_INT>=31)c.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(android.net.Uri.parse("package:"+c.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
   }
   Function("openFullScreenSettings"){
    val c=requireNotNull(appContext.reactContext);if(Build.VERSION.SDK_INT>=34)c.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(android.net.Uri.parse("package:"+c.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

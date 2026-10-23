@@ -6,25 +6,33 @@ import HomeScreen from './src/screens/HomeScreen'
 import AlarmEditor from './src/screens/AlarmEditor'
 import RingingScreen from './src/screens/RingingScreen'
 import PasswordScreen from './src/screens/PasswordScreen'
-import { defaultDraft } from './src/utils/alarm'
+import { defaultDraft, timeLabel } from './src/utils/alarm'
 import {
   loadAlarms,
   storeAlarms,
   scheduleAlarm,
   cancelIds,
+  restoreAlarm,
 } from './src/services/alarms'
 import { useRinging } from './src/hooks/useRinging'
+import { useAlarmStateSync } from './src/hooks/useAlarmStateSync'
 import styles from './src/styles/styles'
+import AlarmConflictDialog from './src/components/AlarmConflictDialog'
+import { findAlarmConflict } from './src/utils/alarmConflict'
+import { ensureAlarmPermissions } from './src/services/alarmPermissions'
 
 export default function App() {
   const [screen, setScreen] = useState('loading')
   const [alarms, setAlarms] = useState([])
+  const [conflictMessage, setConflictMessage] = useState('')
+  useAlarmStateSync(alarms, setAlarms)
   const [draft, setDraft] = useState(defaultDraft)
   const [now, setNow] = useState(new Date())
   const [passwordEnabled, setPasswordEnabled] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const alarmsRef = useRef([])
+  const schedulingRef = useRef(false)
   useEffect(() => {
     alarmsRef.current = alarms
   }, [alarms])
@@ -41,16 +49,25 @@ export default function App() {
     let mounted = true
     const load = async () => {
       try {
-        await Notifications.requestPermissionsAsync()
+        const permissionsReady = await ensureAlarmPermissions()
+        if (!mounted) return
         const saved = await loadAlarms()
+        if (!mounted) return
+        setAlarms(saved)
         const protectedMode =
           (await SecureStore.getItemAsync('passwordEnabled')) === 'true'
-        const scheduled = await Promise.all(saved.map(scheduleAlarm))
+        const schedulingErrors = []
+        const scheduled = await Promise.all(saved.map(async (alarm) => {
+          if (!permissionsReady) return alarm
+          try { return await restoreAlarm(alarm) }
+          catch (error) { schedulingErrors.push(String(error)); return alarm }
+        }))
         if (!mounted) return
         setPasswordEnabled(protectedMode)
         setAlarms(scheduled)
         await storeAlarms(scheduled)
         setScreen(protectedMode ? 'unlock' : 'home')
+        if (schedulingErrors.length) Alert.alert('Alarm setup warning', [...new Set(schedulingErrors)].join('\n'))
       } catch (e) {
         console.warn('Alarm initialization', e)
         if (mounted) {
@@ -81,13 +98,19 @@ export default function App() {
   }
   const save = async () => {
     Keyboard.dismiss()
+    if (schedulingRef.current) return
+    schedulingRef.current = true
     try {
-      const alarm = { ...draft, id: draft.id || String(Date.now()) }
-      const scheduled = await scheduleAlarm(alarm)
+      const alarm = { ...draft, enabled: true, id: draft.id || String(Date.now()) }
+      if (hasConflict(alarm)) return
+      if (!await ensureAlarmPermissions()) return
+      const scheduled = await scheduleAlarm(alarm, { resetOneTime: true })
       await persist([...alarms.filter((a) => a.id !== alarm.id), scheduled])
       setScreen('home')
     } catch (e) {
       Alert.alert('Could not schedule alarm', String(e))
+    } finally {
+      schedulingRef.current = false
     }
   }
   const remove = async (alarm) => {
@@ -99,12 +122,24 @@ export default function App() {
     }
   }
   const toggle = async (alarm) => {
+    if (schedulingRef.current) return
+    schedulingRef.current = true
     try {
-      const updated = await scheduleAlarm({ ...alarm, enabled: !alarm.enabled })
+      const candidate = { ...alarm, enabled: !alarm.enabled }
+      if (hasConflict(candidate)) return
+      if (candidate.enabled && !await ensureAlarmPermissions()) return
+      const updated = await scheduleAlarm(candidate, { resetOneTime: true })
       await persist(alarms.map((a) => (a.id === alarm.id ? updated : a)))
     } catch (e) {
       Alert.alert('Alarm error', String(e))
+    } finally {
+      schedulingRef.current = false
     }
+  }
+  const hasConflict = (candidate) => {
+    if (!findAlarmConflict(candidate, alarmsRef.current)) return false
+    setConflictMessage(`An active alarm is already set for ${timeLabel(candidate.hour, candidate.minute)} on an overlapping day. Please change the time or choose different days.`)
+    return true
   }
   const edit = (alarm) => {
     setDraft(alarm ? { ...alarm, days: [...alarm.days] } : defaultDraft())
@@ -165,6 +200,7 @@ export default function App() {
     return (
       <>
         <StatusBar barStyle="dark-content" />
+        <AlarmConflictDialog message={conflictMessage} onClose={() => setConflictMessage('')} />
         <AlarmEditor
           draft={draft}
           setDraft={setDraft}
@@ -180,6 +216,7 @@ export default function App() {
   return (
     <>
       <StatusBar barStyle="dark-content" />
+      <AlarmConflictDialog message={conflictMessage} onClose={() => setConflictMessage('')} />
       <HomeScreen
         now={now}
         alarms={alarms}

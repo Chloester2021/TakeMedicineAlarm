@@ -2,6 +2,18 @@ import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 const native = Platform.OS === 'android' ? requireOptionalNativeModule('CalmAlarmNative') : null;
 export const hasNativeAlarm = () => !!native;
+export const nativeAlarmVersion = () => native?.capabilitiesVersion?.() ?? 0;
+export const requireCurrentNativeAlarm = () => {
+ if (nativeAlarmVersion() < 2) throw new Error('Install a rebuilt Calm Alarm APK to use the new notification design, weekly recurrence, and default alarm preview. Metro reloads cannot update Android native code. Your saved alarms have been kept.');
+};
+export const scheduleManagedAlarm = payload => native.scheduleManagedAlarm(JSON.stringify(payload));
+export const cancelManagedAlarm = id => native.cancelManagedAlarm(id);
+export const nativeAlarmStates = async () => nativeAlarmVersion() >= 2 ? JSON.parse(await native.getAlarmStates()) : [];
+export const restoreNativeAlarms = async () => { if (nativeAlarmVersion() >= 2) await native.restoreManagedAlarms(); };
+export const startDefaultTone = () => native.startDefaultTone();
+export const stopDefaultTone = () => native?.stopDefaultTone?.();
+export const startRingingPreview = (session, message, durationMinutes, volumePercent) => native.startRingingPreview(session, message, durationMinutes, volumePercent);
+export const stopRingingPreview = session => native?.stopRingingPreview?.(session);
 export const canScheduleExact = () => native?.canScheduleExact() ?? false;
 export const canUseFullScreen = () => native?.canUseFullScreen() ?? false;
 export const openExactSettings = () => native?.openExactSettings();

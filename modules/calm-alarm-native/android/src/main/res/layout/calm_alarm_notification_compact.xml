@@ -1,0 +1,20 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="48dp"
+  android:orientation="horizontal" android:gravity="center_vertical"
+  android:paddingHorizontal="10dp" android:background="@drawable/calm_alarm_card">
+  <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+    android:layout_height="wrap_content" android:orientation="vertical">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:text="Time to wake up" android:textSize="12sp" android:textStyle="bold"
+      android:textColor="#ffffff" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/alarm_message" android:layout_width="match_parent"
+      android:layout_height="wrap_content" android:textSize="11sp" android:textColor="#ffffff"
+      android:maxLines="1" android:ellipsize="end" />
+  </LinearLayout>
+  <TextView android:id="@+id/alarm_time" android:layout_width="wrap_content"
+    android:layout_height="wrap_content" android:layout_marginHorizontal="8dp"
+    android:textSize="16sp" android:textStyle="bold" android:textColor="#9cf6e3" />
+  <TextView android:id="@+id/alarm_stop" android:layout_width="48dp" android:layout_height="40dp"
+    android:gravity="center" android:text="Stop" android:textSize="12sp" android:textStyle="bold"
+    android:textColor="#ffffff" android:background="@drawable/calm_alarm_stop" />
+</LinearLayout>

@@ -1,0 +1,28 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:orientation="vertical" android:gravity="center_horizontal"
+  android:padding="12dp" android:background="@drawable/calm_alarm_card">
+  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:gravity="center" android:text="ALARM RINGING" android:textSize="10sp"
+    android:textStyle="bold" android:letterSpacing="0.1" android:textColor="#ffa79c" />
+  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="4dp" android:gravity="center" android:text="Time to wake up"
+    android:textSize="16sp" android:textStyle="bold" android:textColor="#ffffff" />
+  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="8dp" android:gravity="center" android:text="Alarm"
+    android:textSize="18sp" android:textStyle="bold" android:textColor="#ffffff" />
+  <TextView android:id="@+id/alarm_time" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="4dp" android:gravity="center"
+    android:textSize="32sp" android:textStyle="bold" android:textColor="#9cf6e3" />
+  <TextView android:id="@+id/alarm_message" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:layout_marginTop="6dp"
+    android:gravity="center" android:textSize="14sp" android:textColor="#ffffff"
+    android:maxLines="2" android:ellipsize="end" />
+  <TextView android:id="@+id/alarm_stop" android:layout_width="match_parent" android:layout_height="40dp"
+    android:layout_marginTop="10dp" android:gravity="center" android:text="Stop"
+    android:textSize="13sp" android:textStyle="bold" android:textColor="#ffffff"
+    android:background="@drawable/calm_alarm_stop" />
+  <TextView android:id="@+id/alarm_duration" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="6dp" android:gravity="center"
+    android:text="Automatically stops after 1 minute" android:textSize="10sp" android:textColor="#a6c5d2" />
+</LinearLayout>

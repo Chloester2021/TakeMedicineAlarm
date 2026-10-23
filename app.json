@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Calm Alarm",
+    "icon": "./logo.png",
     "slug": "calm-alarm",
     "scheme": "calmalarm",
     "version": "1.0.0",
@@ -15,6 +16,10 @@
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./logo.png",
+        "backgroundColor": "#E5EDE7"
+      },
       "permissions": [
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",
@@ -27,7 +32,7 @@
       "package": "com.example.calmalarm"
     },
     "plugins": [
-      "expo-notifications",
+      ["expo-notifications", { "sounds": ["./assets/chime.wav"] }],
       "expo-secure-store",
       "expo-audio",
       "expo-status-bar",
