@@ -50,7 +50,7 @@ export function useRinging(onFinish) {
       try {
         requireCurrentNativeAlarm();
         if (normalizeVolumePercent(alarm.volumePercent) !== null && nativeAlarmVersion() < 4) {
-          throw new Error('Install a rebuilt Calm Alarm APK to preview custom volume for both tone and speech.');
+          throw new Error('Install a rebuilt SpeakRx APK to preview custom volume for both tone and speech.');
         }
       }
       catch (error) { Alert.alert('New APK required', error.message); finishRef.current(isPreview); return; }

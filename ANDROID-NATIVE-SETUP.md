@@ -1,4 +1,4 @@
-# Calm Alarm Android native prototype
+# SpeakRx Android native prototype
 
 This is a **development prototype**, not a certified reliable alarm clock.
 

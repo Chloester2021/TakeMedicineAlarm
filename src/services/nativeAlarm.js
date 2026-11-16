@@ -4,7 +4,7 @@ const native = Platform.OS === 'android' ? requireOptionalNativeModule('CalmAlar
 export const hasNativeAlarm = () => !!native;
 export const nativeAlarmVersion = () => native?.capabilitiesVersion?.() ?? 0;
 export const requireCurrentNativeAlarm = () => {
- if (nativeAlarmVersion() < 2) throw new Error('Install a rebuilt Calm Alarm APK to use the new notification design, weekly recurrence, and default alarm preview. Metro reloads cannot update Android native code. Your saved alarms have been kept.');
+ if (nativeAlarmVersion() < 2) throw new Error('Install a rebuilt SpeakRx APK to use the new notification design, weekly recurrence, and default alarm preview. Metro reloads cannot update Android native code. Your saved alarms have been kept.');
 };
 export const scheduleManagedAlarm = payload => native.scheduleManagedAlarm(JSON.stringify(payload));
 export const cancelManagedAlarm = id => native.cancelManagedAlarm(id);

@@ -72,7 +72,7 @@ test('custom volume on an older APK fails before changing an existing schedule',
 });
 test('unsupported duration on an older APK fails before changing a working schedule', async () => {
   const { api, calls } = service('android', 2);
-  await assert.rejects(api.scheduleAlarm({ ...alarm, durationMinutes: 5 }), /rebuilt Calm Alarm APK/);
+  await assert.rejects(api.scheduleAlarm({ ...alarm, durationMinutes: 5 }), /rebuilt SpeakRx APK/);
   assert.equal(calls.length, 0);
 });
 test('restoring a native rule never reschedules a completed one-time alarm', async () => {

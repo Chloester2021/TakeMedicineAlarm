@@ -11,7 +11,7 @@ object AlarmCore {
   const val ACTION_STOP = "expo.modules.calmalarm.STOP"
   fun channel(ctx: Context) {
     val nm=ctx.getSystemService(NotificationManager::class.java)
-    nm.createNotificationChannel(NotificationChannel(CHANNEL,"Calm Alarm ringing",NotificationManager.IMPORTANCE_HIGH).apply {
+    nm.createNotificationChannel(NotificationChannel(CHANNEL,"SpeakRx ringing",NotificationManager.IMPORTANCE_HIGH).apply {
       description="Scheduled wake-up alarms"; lockscreenVisibility=Notification.VISIBILITY_PUBLIC
       setSound(null,null); enableVibration(true)
     })
@@ -68,7 +68,7 @@ class AlarmService:Service() {
     .setColor(android.graphics.Color.rgb(239,91,75))
     .setCategory(NotificationCompat.CATEGORY_ALARM).setPriority(NotificationCompat.PRIORITY_MAX)
     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).setOngoing(true)
-    .setContentIntent(full).setFullScreenIntent(full,true).build()
+    .setContentIntent(full).build()
   if(Build.VERSION.SDK_INT>=29)startForeground(8127,notification,android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
   else startForeground(8127,notification)
   val next=AlarmPlayback(this){stopSelf()}

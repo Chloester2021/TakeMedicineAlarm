@@ -1,4 +1,4 @@
-# Calm Alarm — React Native / Expo prototype
+# SpeakRx — React Native / Expo prototype
 
 ## Run
 

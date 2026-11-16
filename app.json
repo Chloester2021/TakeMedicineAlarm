@@ -1,18 +1,16 @@
 {
   "expo": {
-    "name": "Calm Alarm",
+    "name": "SpeakRx",
     "icon": "./logo.png",
     "slug": "calm-alarm",
-    "scheme": "calmalarm",
+    "scheme": "speakrx",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": [
-          "remote-notification"
-        ]
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -23,18 +21,23 @@
       "permissions": [
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",
-        "USE_FULL_SCREEN_INTENT",
-        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "package": "com.example.calmalarm"
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_FULL_SCREEN_INTENT"
+      ],
+      "package": "com.minimalistdesign.speakrx"
     },
     "plugins": [
       ["expo-notifications", { "sounds": ["./assets/chime.wav"] }],
       "expo-secure-store",
-      "expo-audio",
+      [
+        "expo-audio",
+        { "recordAudioAndroid": false, "microphonePermission": false }
+      ],
       "expo-status-bar",
       "expo-asset",
       "./plugins/withCalmAlarm"

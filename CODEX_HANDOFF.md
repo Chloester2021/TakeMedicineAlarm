@@ -1,10 +1,10 @@
-# Calm Alarm — Codex handoff
+# SpeakRx — Codex handoff
 
 ## Read this first
 You are joining this project for the first time. Inspect the **actual files in the open VS Code workspace** before editing anything. This document is historical context, not a claim that the current source matches an earlier ZIP. The latest edits made in VS Code and the latest build output are not available to the author of this handoff.
 
 ## Product
-Calm Alarm is a React Native / Expo alarm-clock app targeting **Android and iOS**, with Android native functionality the immediate priority. Windows development workspace: `D:\calm-alarm-v1.1-source\calm-alarm`. Expo SDK 57 was used during recent builds; check actual package versions. The user wants a polished, dependable alarm, not merely a notification reminder.
+SpeakRx is a React Native / Expo alarm-clock app targeting **Android and iOS**, with Android native functionality the immediate priority. Windows development workspace: `D:\calm-alarm-v1.1-source\calm-alarm`. Expo SDK 57 was used during recent builds; check actual package versions. The user wants a polished, dependable alarm, not merely a notification reminder.
 
 ## Architecture expectations
 Keep `App.js` lean. Organize screens in `src/screens/`, reusable components in `src/components/`, hooks in `src/hooks/`, native and JS services in `src/services/`, utilities in `src/utils/`, styles in `src/styles/`, and Android native functionality in `modules/calm-alarm-native/` (Kotlin) with Expo config plugin under `plugins/`. Confirm actual layout; preserve existing features and data. Avoid giant single-file rewrites.

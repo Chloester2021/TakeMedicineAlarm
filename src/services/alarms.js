@@ -33,10 +33,10 @@ export async function scheduleAlarm(input, options) {
   }
   if (Platform.OS === 'android') {
     if (alarm.volumePercent !== null && nativeAlarmVersion() < 4) {
-      throw new Error('Install a rebuilt Calm Alarm APK to use custom alarm volume for tone and speech. Your current alarm schedule has been kept.');
+      throw new Error('Install a rebuilt SpeakRx APK to use custom alarm volume for tone and speech. Your current alarm schedule has been kept.');
     }
     if (alarm.durationMinutes > 1 && nativeAlarmVersion() < 3) {
-      throw new Error('Install a rebuilt Calm Alarm APK to schedule alarms longer than 1 minute. Your current APK supports 1-minute alarms; Metro cannot update native playback.');
+      throw new Error('Install a rebuilt SpeakRx APK to schedule alarms longer than 1 minute. Your current APK supports 1-minute alarms; Metro cannot update native playback.');
     }
     const scheduleToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const nextTriggerAt = await scheduleManagedAlarm({ id: alarm.id, hour: alarm.hour, minute: alarm.minute,

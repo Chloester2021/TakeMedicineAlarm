@@ -5,7 +5,6 @@ module.exports = function withCalmAlarm(config) {
     const perms = m['uses-permission'] || (m['uses-permission'] = [])
     for (const name of [
       'android.permission.SCHEDULE_EXACT_ALARM',
-      'android.permission.USE_FULL_SCREEN_INTENT',
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
